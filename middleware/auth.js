@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_hackathon_key';
 
+
 export const authMiddleware = (req, res, next) => {
   // 1. Get token from header
   const token = req.header("Authorization")?.replace("Bearer ", "");

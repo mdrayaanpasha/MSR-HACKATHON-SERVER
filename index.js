@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import userRouter from "./routers/user.router.js";
+import resourceRouter from "./routers/resource.router.js";
 
 dotenv.config();
 
@@ -15,6 +16,7 @@ app.use(express.json()); // Parse incoming JSON bodies
 // 3. Routes
 // Mount the User Routes at /api/users
 app.use("/api/users", userRouter);
+app.use("/api/resource",resourceRouter)
 
 
 app.get("/api/health", (req, res) => {
