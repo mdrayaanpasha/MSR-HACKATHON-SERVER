@@ -28,6 +28,9 @@ model User {
   college   String   // CRITICAL: Used for matching Private resources
   branch    String   // Department
   semester  Int      // Current semester
+
+  type  String
+  goal String 
   
   // Optional Fields
   avatarUrl String?
