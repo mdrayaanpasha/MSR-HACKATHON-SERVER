@@ -48,6 +48,8 @@ class ResourceController {
       }
 
       // Optional: Check privacy access here
+
+
       if (resource.privacy === 'PRIVATE') {
         if (!req.user || req.user.college !== resource.college) {
           return res.status(403).json({ error: "Access denied to this private resource." });
@@ -164,51 +166,59 @@ async getAllResources(req, res) {
     
     // 1. Fetch User Context
     let user = null;
+
     if (req.user && req.user.id) {
       user = await prisma.user.findUnique({ where: { id: req.user.id } });
     }
-    const userCollege = user ? user.college : null;
+    
+    const userCollege = req.user.college
 
-    // 2. Build Query with Strict Privacy Enforcement
-    const whereClause = {
-      AND: [
-        // Basic Search Filters
-        search ? {
-          OR: [
-            { title: { contains: search, mode: 'insensitive' } },
-            { tags: { contains: search, mode: 'insensitive' } },
-            { subject: { contains: search, mode: 'insensitive' } }
-          ]
-        } : {},
-        subject ? { subject: { contains: subject, mode: 'insensitive' } } : {},
-        semester ? { semester: parseInt(semester) } : {}, 
-        type ? { type: type } : {},
 
-        // --- STRICT PRIVACY LOGIC ---
-        // If PUBLIC: Everyone sees it.
-        // If PRIVATE: Only users from the SAME college see it.
+    // 2. Build Base Filters
+    const filters = [];
+
+    if (search) {
+      filters.push({
+        OR: [
+          { title: { contains: search, mode: 'insensitive' } },
+          { tags: { contains: search, mode: 'insensitive' } },
+          { subject: { contains: search, mode: 'insensitive' } }
+        ]
+      });
+    }
+
+    if (subject) filters.push({ subject: { contains: subject, mode: 'insensitive' } });
+    if (semester) filters.push({ semester: parseInt(semester) });
+    if (type) filters.push({ type: type });
+
+    // 3. APPLY REFINED PRIVACY LOGIC
+    // We want: (All Public Files) OR (Private Files where College matches)
+    const privacyFilter = {
+      OR: [
+        { privacy: 'PUBLIC' },
         {
-          OR: [
-            { privacy: 'PUBLIC' }, 
-            userCollege ? { 
-              AND: [
-                { privacy: 'PRIVATE' },
-                { college: userCollege } 
-              ]
-            } : { id: 'non-existent-id' } // Force hide private if no user/college context exists
+          AND: [
+            { privacy: 'PRIVATE' },
+            { college: userCollege || "NO_COLLEGE_MATCH" } 
           ]
         }
       ]
     };
+    
+    filters.push(privacyFilter);
 
-    // 3. Fetch Matches
+    // 4. Fetch Matches
     let resources = await prisma.resource.findMany({
-      where: whereClause,
-      include: { uploader: { select: { name: true, college: true } } },
+      where: {
+        AND: filters
+      },
+      include: { 
+        uploader: { select: { name: true, college: true } } 
+      },
       orderBy: { createdAt: 'desc' }
     });
 
-    // 4. Smart Ranking (Same as before)
+    // 5. Smart Ranking
     if (user) {
       resources.sort((a, b) => {
         let scoreA = (a.branch === user.branch ? 10 : 0) + (a.semester === user.semester ? 5 : 0);
