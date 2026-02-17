@@ -14,7 +14,7 @@ class UserController {
   // POST /api/auth/register
   async register(req, res) {
     try {
-      const { name, email, password, college, branch, semester, bio } = req.body;
+      const { name, email, password, college, branch, semester, bio, type, goal } = req.body;
 
       // Basic Validation
       if (!name || !email || !password || !college || !branch || !semester) {
@@ -40,7 +40,9 @@ class UserController {
           college,
           branch,
           semester: parseInt(semester), // Ensure integer type for DB
-          bio: bio || ""
+          bio: bio || "",
+          type,
+          goal
         }
       });
 
