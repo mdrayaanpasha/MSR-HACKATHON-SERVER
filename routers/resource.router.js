@@ -17,4 +17,32 @@ resourceRouter.post(
   resourceController.uploadResource // 3. Execute Logic
 );
 
+
+resourceRouter.get(
+  "/:id", 
+  authMiddleware, // Required to get req.user for personalization
+  resourceController.getResourceById
+);
+
+
+resourceRouter.post(
+  "/", 
+  authMiddleware, // Required to get req.user for personalization
+  resourceController.getAllResources
+);
+
+resourceRouter.put(
+  "/:id", 
+  authMiddleware, 
+  resourceController.updateResource
+);
+
+
+
+
+
+
+
+
+
 export default resourceRouter;

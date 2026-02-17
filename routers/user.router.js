@@ -33,4 +33,7 @@ userRouter.put("/profile", authMiddleware, userController.updateProfile);
 // DELETE /api/users/profile
 userRouter.delete("/profile", authMiddleware, userController.deleteAccount);
 
+
+
+
 export default userRouter;

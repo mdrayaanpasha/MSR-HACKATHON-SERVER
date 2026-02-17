@@ -136,12 +136,14 @@ class UserController {
 
   // 4. UPDATE PROFILE
   // PUT /api/users/profile
+  // 4. UPDATE PROFILE
+  // PUT /api/users/profile
   async updateProfile(req, res) {
     try {
       const userId = req.user.id;
-      const { name, branch, semester, bio, avatarUrl } = req.body;
+      // Added 'type' and 'goal' to the destructured body
+      const { name, branch, semester, bio, avatarUrl, type, goal } = req.body;
 
-      // Update allowed fields only
       const updatedUser = await prisma.user.update({
         where: { id: userId },
         data: {
@@ -149,7 +151,9 @@ class UserController {
           branch,
           semester: semester ? parseInt(semester) : undefined,
           bio,
-          avatarUrl
+          avatarUrl,
+          type, // Update Archetype
+          goal  // Update Target Metric
         }
       });
 
@@ -157,10 +161,10 @@ class UserController {
       res.status(200).json({ message: "Profile updated", user: userData });
 
     } catch (error) {
+      console.error("Update Error:", error);
       res.status(500).json({ error: "Error updating profile" });
     }
   }
-
   // 5. DELETE ACCOUNT (Optional but good for CRUD completeness)
   // DELETE /api/users/profile
   async deleteAccount(req, res) {
@@ -173,6 +177,66 @@ class UserController {
 
     } catch (error) {
       res.status(500).json({ error: "Error deleting account" });
+    }
+  }
+
+  // GET /api/users/dashboard
+  // Returns full profile, contribution stats, and activity history
+  async getUserDashboard(req, res) {
+    try {
+      const userId = req.user.id; // From Auth Middleware
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+          // Fetch all resources they've uploaded
+          uploads: {
+            orderBy: { createdAt: 'desc' },
+            select: {
+              id: true,
+              title: true,
+              subject: true,
+              type: true,
+              createdAt: true,
+              privacy: true
+            }
+          },
+          // Fetch their recent reviews
+          reviews: {
+            orderBy: { createdAt: 'desc' },
+            include: {
+              resource: {
+                select: { title: true }
+              }
+            }
+          },
+          // Aggregates for the "Life" part of the UI
+          _count: {
+            select: {
+              uploads: true,
+              reviews: true
+            }
+          }
+        }
+      });
+
+      if (!user) return res.status(404).json({ error: "User not found" });
+
+      // Exclude sensitive data
+      const { password: _, ...userData } = user;
+
+      res.status(200).json({
+        ...userData,
+        stats: {
+          totalUploads: user._count.uploads,
+          totalReviews: user._count.reviews,
+          rank: user._count.uploads > 10 ? "ELITE" : "CONTRIBUTOR" // Visual label logic
+        }
+      });
+
+    } catch (error) {
+      console.error("Dashboard Error:", error);
+      res.status(500).json({ error: "Error fetching dashboard data" });
     }
   }
 }
