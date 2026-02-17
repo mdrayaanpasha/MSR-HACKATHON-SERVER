@@ -14,6 +14,8 @@ reviewRouter.post(
   reviewController.addReview
 );
 
+
+
 // ==========================================
 // 2. Get Reviews (Public or Protected)
 // GET /api/reviews/:resourceId
@@ -32,5 +34,24 @@ reviewRouter.delete(
   authMiddleware, 
   reviewController.deleteReview
 );
+
+
+
+reviewRouter.put(
+  "/:reviewId", 
+  authMiddleware, 
+  reviewController.updateReview
+);
+
+
+// GET /api/reviews/mine
+reviewRouter.get(
+  "/mine", 
+  authMiddleware, 
+  reviewController.getMyReviews
+);
+
+
+
 
 export default reviewRouter;

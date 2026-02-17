@@ -52,6 +52,56 @@ class reviewController {
     }
   }
 
+
+  // 4. UPDATE REVIEW
+  // PUT /api/reviews/:reviewId
+  async updateReview(req, res) {
+    try {
+      const { reviewId } = req.params;
+      const { rating, comment } = req.body;
+      const userId = req.user.id; // From Auth Middleware
+
+      // 1. Verify existence and ownership
+      const existingReview = await prisma.review.findUnique({
+        where: { id: reviewId }
+      });
+
+      if (!existingReview) {
+        return res.status(404).json({ message: "Review not found." });
+      }
+
+      if (existingReview.userId !== userId) {
+        return res.status(403).json({ message: "Unauthorized: You can only edit your own reviews." });
+      }
+
+      // 2. Validate new rating if provided
+      if (rating && (rating < 1 || rating > 5)) {
+        return res.status(400).json({ message: "Rating must be between 1 and 5." });
+      }
+
+      // 3. Execute update
+      const updatedReview = await prisma.review.update({
+        where: { id: reviewId },
+        data: {
+          rating: rating ? parseInt(rating) : undefined,
+          comment: comment !== undefined ? comment : undefined,
+        },
+        include: {
+          user: { select: { name: true, avatarUrl: true } }
+        }
+      });
+
+      return res.status(200).json({
+        message: "Review updated successfully.",
+        review: updatedReview
+      });
+
+    } catch (error) {
+      console.error("Update Review Error:", error);
+      return res.status(500).json({ message: "Internal Server Error" });
+    }
+  }
+
   // 2. GET REVIEWS FOR A RESOURCE
   // GET /api/resources/:resourceId/reviews
   async getReviews(req, res) {
@@ -83,6 +133,43 @@ class reviewController {
     } catch (error) {
       console.error(error);
       return res.status(500).json({ message: "Error fetching reviews" });
+    }
+  }
+
+  // GET /api/reviews/mine
+  // Fetches all reviews written by the authenticated user (via token)
+  async getMyReviews(req, res) {
+    try {
+      // The ID is extracted from the decoded JWT by your authMiddleware
+      const userId = req.user.id; 
+
+      const reviews = await prisma.review.findMany({
+        where: { userId: userId },
+        include: {
+          resource: {
+            select: {
+              id: true,
+              title: true,
+              subject: true,
+              type: true,
+              fileUrl: true
+            }
+          }
+        },
+        orderBy: {
+          createdAt: 'desc'
+        }
+      });
+
+      return res.status(200).json({
+        message: "Personal review history synchronized.",
+        count: reviews.length,
+        data: reviews
+      });
+
+    } catch (error) {
+      console.error("Fetch My Reviews Error:", error);
+      return res.status(500).json({ error: "Internal Server Error" });
     }
   }
 

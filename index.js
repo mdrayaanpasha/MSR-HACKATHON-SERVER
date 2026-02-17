@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import userRouter from "./routers/user.router.js";
 import resourceRouter from "./routers/resource.router.js";
 import reviewRouter from "./routers/ratings.router.js";
+import aiRouter from "./routers/AI.router.js";
 
 dotenv.config();
 
@@ -19,7 +20,7 @@ app.use(express.json()); // Parse incoming JSON bodies
 app.use("/api/users", userRouter);
 app.use("/api/resource",resourceRouter);
 app.use("/api/reviews",reviewRouter);
-
+app.use("/api/ai",aiRouter);
 
 app.get("/api/health", (req, res) => {
   res.status(200).json({ 

@@ -119,93 +119,115 @@ class ResourceController {
       return res.status(500).json({ message: "Internal Server Error" });
     }
   }
-
- // GET /api/resources (Smart Ranked Feed)
-  async getAllResources(req, res) {
+// GET /api/reviews/mine
+  // Fetches all reviews written by the authenticated user (via token)
+  async getMyReviews(req, res) {
     try {
-      // 1. Read Query Params
-      const { subject, semester, type, search } = req.body;
-      
-      // 2. Fetch User Context (if logged in)
-      let user = null;
-      if (req.user && req.user.id) {
-        user = await prisma.user.findUnique({ where: { id: req.user.id } });
-      }
-      const userCollege = user ? user.college : null;
+      // The ID is extracted from the decoded JWT by your authMiddleware
+      const userId = req.user.id; 
 
-      // 3. Build the BROADEST Possible Database Query
-      // We do NOT filter by user.branch/semester here to avoid hiding results
-      const whereClause = {
-        AND: [
-          // Text Search (Title, Tags, or Subject)
-          search ? {
-            OR: [
-              { title: { contains: search, mode: 'insensitive' } },
-              { tags: { contains: search, mode: 'insensitive' } },
-              { subject: { contains: search, mode: 'insensitive' } }
-            ]
-          } : {},
-          
-          // Strict Filters (Only if user explicitly clicks a filter button)
-          subject ? { subject: { contains: subject, mode: 'insensitive' } } : {},
-          semester ? { semester: parseInt(semester) } : {}, 
-          type ? { type: type } : {},
-
-          // Privacy Logic (Mandatory)
-          {
-            OR: [
-              { privacy: 'PUBLIC' }, 
-              { 
-                AND: [
-                  { privacy: 'PRIVATE' },
-                  { college: userCollege } // Safe even if user is null
-                ]
-              }
-            ]
+      const reviews = await prisma.review.findMany({
+        where: { userId: userId },
+        include: {
+          resource: {
+            select: {
+              id: true,
+              title: true,
+              subject: true,
+              type: true,
+              fileUrl: true
+            }
           }
-        ]
-      };
-
-      // 4. Fetch All Matches
-      let resources = await prisma.resource.findMany({
-        where: whereClause,
-        include: { uploader: { select: { name: true, college: true } } },
-        orderBy: { createdAt: 'desc' } // Default: Newest first
+        },
+        orderBy: {
+          createdAt: 'desc'
+        }
       });
 
-      // 5. SMART RANKING (The "Perfect Match" Logic)
-      // If user is logged in, we REORDER the list in memory.
-      // Top priority: Same Branch + Same Semester
-      // Second priority: Same Branch
-      // Last priority: Everything else
-      if (user) {
-        resources.sort((a, b) => {
-          let scoreA = 0;
-          let scoreB = 0;
-
-          // Give points for matching the user's profile
-          if (a.branch === user.branch) scoreA += 10;
-          if (a.semester === user.semester) scoreA += 5;
-
-          if (b.branch === user.branch) scoreB += 10;
-          if (b.semester === user.semester) scoreB += 5;
-
-          // Sort Descending (Highest score first)
-          return scoreB - scoreA; 
-        });
-      }
-
       return res.status(200).json({
-        message: "Resources fetched successfully",
-        count: resources.length,
-        data: resources
+        message: "Personal review history synchronized.",
+        count: reviews.length,
+        data: reviews
       });
 
     } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: "Error fetching resources" });
+      console.error("Fetch My Reviews Error:", error);
+      return res.status(500).json({ error: "Internal Server Error" });
     }
   }
+
+ // GET /api/resources (Smart Ranked Feed)
+// GET /api/resources (Smart Ranked Feed)
+async getAllResources(req, res) {
+  try {
+    const { subject, semester, type, search } = req.body;
+    
+    // 1. Fetch User Context
+    let user = null;
+    if (req.user && req.user.id) {
+      user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    }
+    const userCollege = user ? user.college : null;
+
+    // 2. Build Query with Strict Privacy Enforcement
+    const whereClause = {
+      AND: [
+        // Basic Search Filters
+        search ? {
+          OR: [
+            { title: { contains: search, mode: 'insensitive' } },
+            { tags: { contains: search, mode: 'insensitive' } },
+            { subject: { contains: search, mode: 'insensitive' } }
+          ]
+        } : {},
+        subject ? { subject: { contains: subject, mode: 'insensitive' } } : {},
+        semester ? { semester: parseInt(semester) } : {}, 
+        type ? { type: type } : {},
+
+        // --- STRICT PRIVACY LOGIC ---
+        // If PUBLIC: Everyone sees it.
+        // If PRIVATE: Only users from the SAME college see it.
+        {
+          OR: [
+            { privacy: 'PUBLIC' }, 
+            userCollege ? { 
+              AND: [
+                { privacy: 'PRIVATE' },
+                { college: userCollege } 
+              ]
+            } : { id: 'non-existent-id' } // Force hide private if no user/college context exists
+          ]
+        }
+      ]
+    };
+
+    // 3. Fetch Matches
+    let resources = await prisma.resource.findMany({
+      where: whereClause,
+      include: { uploader: { select: { name: true, college: true } } },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // 4. Smart Ranking (Same as before)
+    if (user) {
+      resources.sort((a, b) => {
+        let scoreA = (a.branch === user.branch ? 10 : 0) + (a.semester === user.semester ? 5 : 0);
+        let scoreB = (b.branch === user.branch ? 10 : 0) + (b.semester === user.semester ? 5 : 0);
+        return scoreB - scoreA; 
+      });
+    }
+
+    return res.status(200).json({
+      message: "Resources fetched successfully",
+      count: resources.length,
+      data: resources
+    });
+
+  } catch (error) {
+    console.error("Feed Error:", error);
+    res.status(500).json({ error: "Internal system failure." });
+  }
+}
 
 
   // PUT /api/resources/:id
