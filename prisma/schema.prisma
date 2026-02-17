@@ -5,8 +5,8 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
+
 }
 
 datasource db {
@@ -15,3 +15,91 @@ datasource db {
 }
 
 
+
+// 2. Models
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String   // Remember to hash this!
+  
+  // Mandatory Profile Fields
+  name      String
+  college   String   // CRITICAL: Used for matching Private resources
+  branch    String   // Department
+  semester  Int      // Current semester
+  
+  // Optional Fields
+  avatarUrl String?
+  bio       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  uploads   Resource[] // Resources uploaded by this user
+  reviews   Review[]   // Reviews written by this user
+}
+
+model Resource {
+  id          String       @id @default(cuid())
+  
+  // Core Info
+  title       String
+  description String?
+  fileUrl     String       // URL from S3/Cloudinary/Local
+  
+  // Search & Filter Metadata
+  subject     String
+  semester    Int
+  branch      String
+  yearBatch   String       // e.g. "2023-2027"
+  type        ResourceType
+  tags        String       // Storing as comma-separated string (e.g., "algorithms,midterm") is easiest for 5hr hackathons
+
+  // Access Control
+  privacy     PrivacyLevel @default(PUBLIC)
+  college     String       // Copy user's college here on upload for easy "Same College" checks
+  
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  // Relations
+  uploaderId  String
+  uploader    User         @relation(fields: [uploaderId], references: [id])
+  reviews     Review[]
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  rating     Int      // 1-5 scale
+  comment    String?  // Text review
+  
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt // Allows editing later
+
+  // Relations
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  resourceId String
+  resource   Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  // MANDATORY CONSTRAINT: One review per user per resource
+  @@unique([userId, resourceId])
+}
+
+// 3. Enums for Strict Typing
+
+enum PrivacyLevel {
+  PUBLIC
+  PRIVATE
+}
+
+enum ResourceType {
+  NOTES
+  QUESTION_PAPER
+  SOLUTION
+  PROJECT_REPORT
+  STUDY_MATERIAL
+  OTHER
+}
